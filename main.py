@@ -1,6 +1,7 @@
 import os.path
 import io
 import time
+import socket
 import qrcode
 from datetime import datetime
 import customtkinter as ctk
@@ -17,6 +18,16 @@ from googleapiclient.http import MediaFileUpload
 
 # If modifying these scopes, delete the file token.json.
 SCOPES = ["https://www.googleapis.com/auth/drive.file"]
+
+
+
+def has_internet_connection(timeout=3):
+  """Return True when the machine can reach the internet."""
+  try:
+    socket.create_connection(("8.8.8.8", 53), timeout=timeout).close()
+    return True
+  except OSError:
+    return False
 
 
 
@@ -253,6 +264,13 @@ class QRGeneratorApp(ctk.CTk):
     if not self.selected_file:
       messagebox.showerror("Error", "Please select a file first!")
       return
+
+    if not has_internet_connection():
+      messagebox.showerror(
+        "No Internet Connection",
+        "You don't have an internet connection. Please enable Wi-Fi or Ethernet and try again."
+      )
+      return
     
     # Disable upload button
     self.upload_btn.configure(state="disabled")
@@ -384,6 +402,15 @@ class QRGeneratorApp(ctk.CTk):
   def upload_process(self):
     """Handle the upload process."""
     try:
+      if not has_internet_connection():
+        self.after(
+          0,
+          lambda: self.upload_error(
+            "You don't have an internet connection. Please enable Wi-Fi or Ethernet and try again."
+          )
+        )
+        return
+
       # Get Google Drive service
       service = get_google_drive_service()
       
@@ -393,7 +420,6 @@ class QRGeneratorApp(ctk.CTk):
       if not folder_id:
         self.after(0, lambda: self.upload_error("Failed to find or create folder"))
         return
-      print("....................before upload")
       # Upload file
       result = upload_file_to_drive(
         service,
@@ -402,7 +428,6 @@ class QRGeneratorApp(ctk.CTk):
         progress_callback=lambda p: self.after(0, lambda: self.update_progress(p)),
         status_callback=lambda m: self.after(0, lambda: self.update_status(m))
       )
-      print("....................after upload")
       if result:
         self.after(0, lambda: self.upload_complete(result))
       else:
